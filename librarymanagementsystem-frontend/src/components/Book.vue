@@ -1,4 +1,3 @@
-<!-- TODO: YOUR CODE HERE -->
 <template>
     <el-scrollbar height="100%" style="width: 100%; height: 100%; ">
         <!-- 标题和搜索框 -->
@@ -101,13 +100,19 @@
         </el-dialog>
 
         <!-- 新书批量入库对话框 -->
-        <!-- <el-dialog v-model="batchstoreVisible" title="新书批量入库" width="30%" align-center>
-            <div style="margin-left: 2vw; font-weight: bold; font-size: 1rem; margin-top: 20px; ">
-                <el-upload class="upload-demo" :action="this.uploadUrl" accept="application/json" multiple :limit="1" :http-request="uploadFile" :file-list="fileList">
-                    <samp class="component-export-cell">导入</samp>
-                </el-upload>
-            </div>
-        </el-dialog> -->
+        <el-dialog v-model="batchstoreVisible" title="新书批量入库" width="30%" align-center>
+            <el-upload
+                class="upload-demo"
+                drag
+                :http-request="BatchUpload"
+                action="http://localhost:8000/book"
+                show-file-list="false"
+                >
+                <i class="el-icon-upload"></i>
+                <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
+                <div class="el-upload__tip" slot="tip">上传 json 文件</div>
+            </el-upload>
+        </el-dialog>
 
         <!-- 图书更改对话框 -->
         <el-dialog v-model="changeVisible" title="更改图书信息" width="30%" align-center>
@@ -347,11 +352,12 @@ export default {
                 (tuple) =>
                     (this.toSearch == '') || // 搜索框为空，即不搜索，全部显示
                     tuple.bookID == this.toSearch || // 图书号与搜索要求一致
+                    tuple.category.includes(this.toSearch) || // 类别包含搜索要求
                     tuple.title.includes(this.toSearch) || // 书名包含搜索要求
                     tuple.author.includes(this.toSearch) || // 作者包含搜索要求
                     tuple.press.includes(this.toSearch) || // 出版社包含搜索要求
-                    tuple.price == this.toSearch || // 价格与搜索要求一致
-                    tuple.publish_year == this.toSearch // 出版年份与搜索要求一致
+                    tuple.price.toString() == this.toSearch || // 价格与搜索要求一致
+                    tuple.publish_year.toString() == this.toSearch // 出版年份与搜索要求一致
             )
         }
     },
@@ -530,7 +536,23 @@ export default {
                     }
                     this.QueryBooks() // 重新查询刷新页面
                 })
-        }
-    },
+        },
+        BatchUpload(file){
+            let formdata = new FormData()
+            formdata.append('file', file.file)
+            axios.post("/book?uploadfile=true", formdata)
+            .then(response => {
+                if (response.data == "Batch store successfully!") {
+                    ElMessage.success("批量入库成功")
+                    this.batchstoreVisible = false
+                    this.QueryBooks()
+                } else if (response.data == "The json data is invalid!") {
+                    ElMessage.error("入库失败！请检查图书格式及其完整性")
+                } else {
+                    ElMessage.error("批量入库失败")
+                }
+            })
+        },
+    }
 }
 </script>

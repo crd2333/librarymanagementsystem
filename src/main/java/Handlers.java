@@ -6,7 +6,8 @@ import java.text.SimpleDateFormat;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.Headers;
-
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 class CardHandler implements HttpHandler {
     private LibraryManagementSystem library;
@@ -304,19 +305,46 @@ class BookHandler implements HttpHandler {
             while ((line = reader.readLine()) != null) {
                 requestBodyBuilder.append(line);
             }
+            URI requestURI = exchange.getRequestURI();
+            String query = requestURI.getQuery();
 
             // main logic
-            // parse the requestbody to `category`, `title`, `author`, `press`, `publish_year`, `price`, `stock`
-            String requestBodyString = requestBodyBuilder.toString().replace("{", "").replace("}", "").replace("\"", "");
-            String [] parts = requestBodyString.split(",");
-            String category = parts[0].split(":").length == 1 ? "" : parts[0].split(":")[1].trim();
-            String title = parts[1].split(":").length == 1 ? "" : parts[1].split(":")[1].trim();
-            String author = parts[2].split(":").length == 1 ? "" : parts[2].split(":")[1].trim();
-            String press = parts[3].split(":").length == 1 ? "" : parts[3].split(":")[1].trim();
-            int publish_year = Integer.parseInt(parts[4].split(":").length == 1 ? "" : parts[4].split(":")[1].trim());
-            double price = Double.parseDouble(parts[5].split(":").length == 1 ? "" : parts[5].split(":")[1].trim());
-            int stock = Integer.parseInt(parts[6].split(":").length == 1 ? "" : parts[6].split(":")[1].trim());
-            queries.ApiResult result = library.storeBook(new entities.Book(category, title, author, publish_year, press, price, stock));
+            queries.ApiResult result = null;
+            if (query != null) { // query == "uploadfile=true", if there are more command types, making this more specific
+                // remove useless information, like content-type, WebKitFormBoundary etc.
+                int startIndex = requestBodyBuilder.indexOf("[");
+                int endIndex = requestBodyBuilder.lastIndexOf("]");
+                String cleanedRequest = requestBodyBuilder.substring(startIndex, endIndex+1).trim();
+                JSONArray jsonArray = new JSONArray(cleanedRequest);
+                List<entities.Book> books = new ArrayList<>();
+                for (int i = 0; i < jsonArray.length(); i++) {
+                    JSONObject bookObject = jsonArray.getJSONObject(i);
+                    String category = bookObject.optString("category");
+                    String title = bookObject.optString("title");
+                    String author = bookObject.optString("author");
+                    String press = bookObject.optString("press");
+                    int publish_year = bookObject.optInt("publish_year");
+                    double price = bookObject.optDouble("price");
+                    int stock = bookObject.optInt("stock");
+                    if (category.isEmpty() || title.isEmpty() || author.isEmpty() || press.isEmpty() || publish_year == 0 || price == 0.0 || stock == 0) {
+                        throw new IllegalArgumentException("Invalid book data");
+                    }
+                    books.add(new entities.Book(category, title, author, publish_year, press, price, stock));
+                }
+                result = library.storeBook(books);
+            } else {
+                // parse the requestbody to `category`, `title`, `author`, `press`, `publish_year`, `price`, `stock`
+                String requestBodyString = requestBodyBuilder.toString().replace("{", "").replace("}", "").replace("\"", "");
+                String [] parts = requestBodyString.split(",");
+                String category = parts[0].split(":").length == 1 ? "" : parts[0].split(":")[1].trim();
+                String title = parts[1].split(":").length == 1 ? "" : parts[1].split(":")[1].trim();
+                String author = parts[2].split(":").length == 1 ? "" : parts[2].split(":")[1].trim();
+                String press = parts[3].split(":").length == 1 ? "" : parts[3].split(":")[1].trim();
+                int publish_year = Integer.parseInt(parts[4].split(":").length == 1 ? "" : parts[4].split(":")[1].trim());
+                double price = Double.parseDouble(parts[5].split(":").length == 1 ? "" : parts[5].split(":")[1].trim());
+                int stock = Integer.parseInt(parts[6].split(":").length == 1 ? "" : parts[6].split(":")[1].trim());
+                result = library.storeBook(new entities.Book(category, title, author, publish_year, press, price, stock));
+            }
 
             exchange.getResponseHeaders().set("Content-Type", "text/plain");
             exchange.sendResponseHeaders(200, 0);
@@ -325,6 +353,13 @@ class BookHandler implements HttpHandler {
             outputStream.close();
         } catch (IOException e) {
             exchange.sendResponseHeaders(500, -1);
+            e.printStackTrace();
+        } catch (IllegalArgumentException e) {
+            exchange.getResponseHeaders().set("Content-Type", "text/plain");
+            exchange.sendResponseHeaders(200, 0);
+            OutputStream outputStream = exchange.getResponseBody();
+            outputStream.write("The json data is invalid!".getBytes());
+            outputStream.close();
             e.printStackTrace();
         }
     }

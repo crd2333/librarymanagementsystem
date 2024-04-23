@@ -68,6 +68,8 @@ export default {
             let response = await axios.get('/borrow', { params: { cardID: this.toQuery } }) // 向/borrow发出GET请求，参数为cardID=this.toQuery
             let borrows = response.data // 获取响应负载
             borrows.forEach(borrow => { // 对于每一个借书记录
+                if (borrow.returnTime == "1970.01.01 08:00")
+                    borrow.returnTime = "未归还"
                 this.tableData.push(borrow) // 将它加入到列表项中
             });
             this.isShow = true // 显示结果列表
